@@ -10,6 +10,7 @@ function StudentDashboard() {
   const [loading, setLoading] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loggedInStudent, setLoggedInStudent] = useState(null);
+  const [showLogin, setShowLogin] = useState(true);
 
   useEffect(() => {
     checkLoginStatus();
@@ -98,7 +99,36 @@ function StudentDashboard() {
   };
 
   if (!isLoggedIn) {
-    return <StudentLogin onLoginSuccess={handleLoginSuccess} />;
+    if (showLogin) {
+      return (
+        <StudentLogin 
+          onLoginSuccess={(studentData) => {
+            handleLoginSuccess(studentData);
+            setShowLogin(false);
+          }}
+          onClose={() => setShowLogin(false)}
+        />
+      );
+    }
+    
+    return (
+      <div className="dashboard">
+        <div className="dashboard-card">
+          <h2>🎓 Student Dashboard</h2>
+          <p className="description" style={{ textAlign: 'center', marginBottom: '2rem' }}>
+            View your behavior analysis reports and track your progress.
+          </p>
+          <div style={{ textAlign: 'center' }}>
+            <button 
+              className="btn-primary" 
+              onClick={() => setShowLogin(true)}
+            >
+              🔑 Student Login
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

@@ -8,6 +8,13 @@
   padding: 2.5rem;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
   border: 1px solid rgba(0, 0, 0, 0.05);
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+
+body.dark-mode .audit-card {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: rgba(71, 85, 105, 0.3);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 
 .audit-header {
@@ -18,26 +25,33 @@
 }
 
 .audit-header h2 {
+  font-family: 'Montserrat', sans-serif;
   font-size: 1.8rem;
   font-weight: 700;
-  color: #1f2937;
+  color: #1e40af;
+  transition: color 0.3s ease;
+}
+
+body.dark-mode .audit-header h2 {
+  color: #60a5fa;
 }
 
 .btn-refresh {
+  font-family: 'Roboto', sans-serif;
   padding: 0.75rem 1.5rem;
-  background: linear-gradient(135deg, #ff6b00 0%, #ff8500 100%);
+  background: linear-gradient(135deg, #14b8a6 0%, #3b82f6 100%);
   color: white;
   border: none;
   border-radius: 0.75rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s;
-  box-shadow: 0 4px 15px rgba(255, 107, 0, 0.3);
+  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
 }
 
 .btn-refresh:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 15px rgba(255, 107, 0, 0.5);
+  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
 }
 
 .loading,
@@ -46,6 +60,12 @@
   padding: 3rem;
   color: #6b7280;
   font-size: 1.1rem;
+  transition: color 0.3s ease;
+}
+
+body.dark-mode .loading,
+body.dark-mode .no-logs {
+  color: #94a3b8;
 }
 
 .logs-table {
@@ -66,16 +86,34 @@
   border-bottom: 2px solid #e5e7eb;
   position: sticky;
   top: 0;
+  transition: all 0.3s ease;
+}
+
+body.dark-mode .logs-table th {
+  background: rgba(15, 23, 42, 0.8);
+  color: #cbd5e1;
+  border-bottom-color: rgba(71, 85, 105, 0.5);
 }
 
 .logs-table td {
   padding: 1rem;
   border-bottom: 1px solid #e5e7eb;
   color: #4b5563;
+  transition: all 0.3s ease;
+}
+
+body.dark-mode .logs-table td {
+  border-bottom-color: rgba(71, 85, 105, 0.3);
+  color: #cbd5e1;
 }
 
 .logs-table tr:hover {
   background: #f9fafb;
+  transition: background 0.2s ease;
+}
+
+body.dark-mode .logs-table tr:hover {
+  background: rgba(30, 41, 59, 0.5);
 }
 
 .time-cell {

@@ -8,14 +8,27 @@
   padding: 2.5rem;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
   border: 1px solid rgba(0, 0, 0, 0.05);
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+
+body.dark-mode .enrollment-card {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: rgba(71, 85, 105, 0.3);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 
 .enrollment-card h2 {
+  font-family: 'Montserrat', sans-serif;
   font-size: 1.8rem;
   font-weight: 700;
   margin-bottom: 0.5rem;
-  color: #1f2937;
+  color: #1e40af;
   text-align: center;
+  transition: color 0.3s ease;
+}
+
+body.dark-mode .enrollment-card h2 {
+  color: #60a5fa;
 }
 
 .enrollment-form {
@@ -32,11 +45,24 @@
   border: 2px solid #e5e7eb;
   border-radius: 0.5rem;
   outline: none;
-  transition: border-color 0.3s;
+  transition: all 0.3s;
+  background: white;
+  color: #1f2937;
+}
+
+body.dark-mode .input-field {
+  background: rgba(15, 23, 42, 0.5);
+  border-color: rgba(71, 85, 105, 0.5);
+  color: #e2e8f0;
 }
 
 .input-field:focus {
   border-color: #667eea;
+}
+
+body.dark-mode .input-field:focus {
+  border-color: #60a5fa;
+  background: rgba(30, 58, 138, 0.3);
 }
 
 .capture-section {
@@ -132,9 +158,10 @@
 }
 
 .btn-enroll {
+  font-family: 'Roboto', sans-serif;
   width: 100%;
   padding: 1rem;
-  background: linear-gradient(135deg, #ff6b00 0%, #ff8500 100%);
+  background: linear-gradient(135deg, #14b8a6 0%, #3b82f6 100%);
   color: white;
   border: none;
   border-radius: 0.75rem;
@@ -142,12 +169,12 @@
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s;
-  box-shadow: 0 4px 15px rgba(255, 107, 0, 0.3);
+  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
 }
 
 .btn-enroll:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(255, 107, 0, 0.5);
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
 }
 
 .enrolled-section {
@@ -167,6 +194,11 @@
   text-align: center;
   color: #6b7280;
   padding: 2rem;
+  transition: color 0.3s ease;
+}
+
+body.dark-mode .no-students {
+  color: #94a3b8;
 }
 
 .enrolled-list {
@@ -183,12 +215,23 @@
   background: #f9fafb;
   border: 2px solid #e5e7eb;
   border-radius: 0.75rem;
-  transition: all 0.2s;
+  transition: all 0.3s;
+}
+
+body.dark-mode .enrolled-item {
+  background: rgba(15, 23, 42, 0.5);
+  border-color: rgba(71, 85, 105, 0.3);
 }
 
 .enrolled-item:hover {
   border-color: #10b981;
   box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);
+}
+
+body.dark-mode .enrolled-item:hover {
+  border-color: #34d399;
+  box-shadow: 0 2px 8px rgba(52, 211, 153, 0.3);
+  background: rgba(30, 41, 59, 0.6);
 }
 
 .enrolled-icon {
@@ -214,11 +257,21 @@
 .enrolled-info strong {
   font-size: 1rem;
   color: #1f2937;
+  transition: color 0.3s ease;
+}
+
+body.dark-mode .enrolled-info strong {
+  color: #f1f5f9;
 }
 
 .enrolled-info span {
   font-size: 0.85rem;
   color: #6b7280;
+  transition: color 0.3s ease;
+}
+
+body.dark-mode .enrolled-info span {
+  color: #94a3b8;
 }
 
 .btn-delete-small {
@@ -244,30 +297,32 @@
 }
 
 .tab-btn {
+  font-family: 'Roboto', sans-serif;
   padding: 0.75rem 1.5rem;
-  background: #1a1a1a;
-  border: 2px solid rgba(255, 107, 0, 0.3);
+  background: #f1f5f9;
+  border: 2px solid #e2e8f0;
   border-radius: 0.5rem;
   cursor: pointer;
   font-weight: 600;
   font-size: 1rem;
-  color: #ff8500;
+  color: #64748b;
   transition: all 0.3s;
 }
 
 .tab-btn:hover {
-  background: #2d1810;
-  border-color: rgba(255, 107, 0, 0.5);
+  background: #e0f2fe;
+  border-color: #bae6fd;
   transform: translateY(-2px);
-  box-shadow: 0 2px 8px rgba(255, 107, 0, 0.3);
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+  color: #1e40af;
 }
 
 .tab-btn.active {
-  background: linear-gradient(135deg, #ff6b00 0%, #ff8500 100%);
+  background: linear-gradient(135deg, #14b8a6 0%, #3b82f6 100%);
   color: white;
-  border-color: #ff6b00;
+  border-color: transparent;
   transform: translateY(-2px);
-  box-shadow: 0 4px 15px rgba(255, 107, 0, 0.5);
+  box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
 }
 
 .divider {
@@ -337,10 +392,16 @@
   margin: 1rem 0;
 }
 
+body.dark-mode .file-label {
+  background: rgba(15, 23, 42, 0.5);
+  border-color: rgba(71, 85, 105, 0.5);
+  color: #94a3b8;
+}
+
 .file-label:hover {
-  border-color: #ff6b00;
-  background: #2d1810;
-  color: #ff8500;
+  border-color: #3b82f6;
+  background: #eff6ff;
+  color: #1e40af;
 }
 
 .file-label.bulk {

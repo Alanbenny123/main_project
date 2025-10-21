@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import './AdminLogin.css'; // Reuse admin login styles
 
-function StudentLogin({ onLoginSuccess }) {
+function StudentLogin({ onLoginSuccess, onClose }) {
   const [studentId, setStudentId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -35,8 +35,13 @@ function StudentLogin({ onLoginSuccess }) {
   };
 
   return (
-    <div className="admin-login-overlay">
-      <div className="admin-login-card">
+    <div className="admin-login-overlay" onClick={onClose}>
+      <div className="admin-login-card" onClick={(e) => e.stopPropagation()}>
+        {onClose && (
+          <button className="close-btn" onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        )}
         <div className="login-header">
           <div className="lock-icon">🎓</div>
           <h2>Student Login</h2>

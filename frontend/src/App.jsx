@@ -14,6 +14,10 @@ function App() {
   const [results, setResults] = useState(null);
   const [stats, setStats] = useState(null);
   const [activeTab, setActiveTab] = useState('upload'); // upload, live, classroom, enroll, dashboard, audit
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('darkMode');
+    return saved ? JSON.parse(saved) : false;
+  });
 
   useEffect(() => {
     // Check model status on load
@@ -36,6 +40,21 @@ function App() {
       .catch(err => console.error('Failed to load stats:', err));
   }, []);
 
+  useEffect(() => {
+    // Apply dark mode class to body
+    if (darkMode) {
+      document.body.classList.add('dark-mode');
+    } else {
+      document.body.classList.remove('dark-mode');
+    }
+    // Save preference
+    localStorage.setItem('darkMode', JSON.stringify(darkMode));
+  }, [darkMode]);
+
+  const toggleDarkMode = () => {
+    setDarkMode(!darkMode);
+  };
+
   const handleAnalysisComplete = (data) => {
     setResults(data);
   };
@@ -48,9 +67,14 @@ function App() {
           <h1 className="title">🎓 Student Behavior Analysis</h1>
           <p className="subtitle">AI-powered classroom behavior detection using deep learning</p>
         </div>
-        <div className={`model-status ${modelStatus.loaded ? 'active' : ''}`}>
-          <span className="status-indicator"></span>
-          <span className="status-text">{modelStatus.text}</span>
+        <div className="header-actions">
+          <div className={`model-status ${modelStatus.loaded ? 'active' : ''}`}>
+            <span className="status-indicator"></span>
+            <span className="status-text">{modelStatus.text}</span>
+          </div>
+          <button className="theme-toggle" onClick={toggleDarkMode} title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
+            {darkMode ? '☀️' : '🌙'}
+          </button>
         </div>
       </header>
 

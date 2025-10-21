@@ -9,6 +9,7 @@ function FaceEnrollment() {
   const [isCapturing, setIsCapturing] = useState(false);
   const [enrolledStudents, setEnrolledStudents] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [showLogin, setShowLogin] = useState(true);
   const [uploadFiles, setUploadFiles] = useState([]);
   const [bulkFile, setBulkFile] = useState(null);
   const [activeMode, setActiveMode] = useState('webcam'); // webcam, upload, bulk
@@ -232,7 +233,35 @@ function FaceEnrollment() {
   };
 
   if (!isAdmin) {
-    return <AdminLogin onLoginSuccess={() => setIsAdmin(true)} />;
+    if (showLogin) {
+      return (
+        <AdminLogin 
+          onLoginSuccess={() => {
+            setIsAdmin(true);
+            setShowLogin(false);
+          }} 
+          onClose={() => setShowLogin(false)}
+        />
+      );
+    }
+    
+    return (
+      <div className="face-enrollment">
+        <div className="enrollment-card">
+          <h2>🔒 Admin Access Required</h2>
+          <p className="description">
+            Face enrollment is restricted to administrators. Please log in to continue.
+          </p>
+          <button 
+            className="btn-primary" 
+            onClick={() => setShowLogin(true)}
+            style={{ marginTop: '2rem' }}
+          >
+            🔑 Admin Login
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
