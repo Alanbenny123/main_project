@@ -28,12 +28,16 @@ AI-powered classroom behavior detection using deep learning and computer vision.
 - React 18
 - Vite
 - Modern CSS with animations
+- Light/Dark theme support
 
 ### Backend
-- Flask
-- TensorFlow/Keras
-- OpenCV
-- NumPy
+- **Flask** - REST API server
+- **TensorFlow/Keras** - Behavior classification (Swin Transformer)
+- **YOLOv8n** - Person/object detection (Ultralytics)
+- **InsightFace Buffalo_l** - Facial recognition (512D embeddings)
+- **OpenCV** - Video processing
+- **SQLite** - Database for reports and students
+- **NumPy** - Numerical computations
 
 ## Setup Instructions
 
@@ -206,12 +210,29 @@ This creates:
 - `GET /api/reports/student/<student_id>` - Get student's reports
 - `GET /api/reports/<report_id>` - Get detailed report
 
-## Model Information
+## Model & Algorithm Information
 
-- **Architecture**: Swin Transformer
-- **Input Size**: 224x224x3
+### Behavior Classification
+- **Architecture**: Swin Transformer (Vision Transformer)
+- **Input Size**: 224×224×3 RGB images
 - **Classes**: 4 (Raising Hand, Reading, Sleeping, Writing)
 - **Training Samples**: 460
+- **Framework**: TensorFlow 2.x with Keras
+
+### Object Detection
+- **Model**: YOLOv8n (Ultralytics)
+- **Purpose**: Person detection in classroom videos
+- **Speed**: Real-time capable (100+ FPS on GPU)
+- **Accuracy**: High precision for person bounding boxes
+- **Input**: Variable size images (auto-scaled to 640×640)
+
+### Face Recognition
+- **Model**: InsightFace Buffalo_l
+- **Embedding Size**: 512 dimensions
+- **Method**: Cosine similarity matching
+- **Similarity Threshold**: 0.4 (adjustable)
+- **Accuracy**: 99.8% on LFW benchmark
+- **Speed**: ~50ms per face on CPU, ~10ms on GPU
 - **Validation Samples**: 116
 - **Test Samples**: 144
 

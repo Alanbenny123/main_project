@@ -1,6 +1,6 @@
 """
 Face Recognition System for Student Identification
-Detects and identifies multiple students in classroom videos
+Uses YOLOv8n for person/face detection and InsightFace Buffalo_l for recognition
 """
 
 import cv2
@@ -8,236 +8,259 @@ import numpy as np
 import os
 import pickle
 from pathlib import Path
+from ultralytics import YOLO
+import insightface
+from insightface.app import FaceAnalysis
 
-# Face detection using Haar Cascade or DNN
-class FaceDetector:
-    def __init__(self, method='haar'):
-        self.method = method
-        
-        if method == 'haar':
-            # Haar Cascade (faster, less accurate)
-            cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-            self.detector = cv2.CascadeClassifier(cascade_path)
-        
-        elif method == 'dnn':
-            # DNN face detector (more accurate)
-            model_file = 'models/opencv_face_detector_uint8.pb'
-            config_file = 'models/opencv_face_detector.pbtxt'
-            
-            if os.path.exists(model_file) and os.path.exists(config_file):
-                self.detector = cv2.dnn.readNetFromTensorflow(model_file, config_file)
-            else:
-                print("DNN model files not found, falling back to Haar Cascade")
-                cascade_path = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-                self.detector = cv2.CascadeClassifier(cascade_path)
-                self.method = 'haar'
+class YOLODetector:
+    """YOLOv8n-based person and face detection"""
     
-    def detect_faces(self, frame):
-        """Detect faces in frame, return list of (x, y, w, h) boxes"""
-        if self.method == 'haar':
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            faces = self.detector.detectMultiScale(
-                gray,
-                scaleFactor=1.1,
-                minNeighbors=5,
-                minSize=(30, 30)
-            )
-            return faces
+    def __init__(self, model_size='n', conf_threshold=0.5):
+        """
+        Initialize YOLO detector
+        model_size: 'n' (nano), 's' (small), 'm' (medium), 'l' (large), 'x' (xlarge)
+        """
+        self.conf_threshold = conf_threshold
+        print(f"Loading YOLOv8{model_size} model...")
         
-        elif self.method == 'dnn':
-            blob = cv2.dnn.blobFromImage(frame, 1.0, (300, 300), [104, 117, 123], False, False)
-            self.detector.setInput(blob)
-            detections = self.detector.forward()
-            
-            h, w = frame.shape[:2]
-            faces = []
-            
-            for i in range(detections.shape[2]):
-                confidence = detections[0, 0, i, 2]
-                if confidence > 0.5:
-                    x1 = int(detections[0, 0, i, 3] * w)
-                    y1 = int(detections[0, 0, i, 4] * h)
-                    x2 = int(detections[0, 0, i, 5] * w)
-                    y2 = int(detections[0, 0, i, 6] * h)
-                    faces.append([x1, y1, x2-x1, y2-y1])
-            
-            return np.array(faces)
-        
-        return []
-
-
-class FaceRecognizer:
-    """Simple face recognition using LBPH (Local Binary Patterns Histograms)"""
+        # Load YOLOv8 model (auto-downloads if not present)
+        self.model = YOLO(f'yolov8{model_size}.pt')
+        print("✓ YOLOv8 model loaded successfully!")
     
-    def __init__(self, faces_dir='student_faces', encodings_file='face_encodings.pkl'):
+    def detect_persons(self, frame):
+        """
+        Detect persons in frame using YOLO
+        Returns: list of bounding boxes [(x1, y1, x2, y2, confidence), ...]
+        """
+        results = self.model(frame, conf=self.conf_threshold, classes=[0])  # class 0 = person
+        
+        persons = []
+        if results and len(results) > 0:
+            boxes = results[0].boxes
+            if boxes is not None:
+                for box in boxes:
+                    x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                    conf = float(box.conf[0].cpu().numpy())
+                    persons.append((int(x1), int(y1), int(x2), int(y2), conf))
+        
+        return persons
+    
+    def detect_faces_yolo(self, frame):
+        """
+        Detect faces using YOLO (requires custom face detection model)
+        For now, falls back to person detection
+        """
+        # If you have a custom YOLO face detection model, use it here
+        # For now, detect persons and use upper portion as face region
+        persons = self.detect_persons(frame)
+        
+        faces = []
+        for (x1, y1, x2, y2, conf) in persons:
+            # Estimate face region (upper 40% of person bbox)
+            h = y2 - y1
+            face_h = int(h * 0.4)
+            face_box = (x1, y1, x2, y1 + face_h, conf)
+            faces.append(face_box)
+        
+        return faces
+
+
+class BuffaloFaceRecognizer:
+    """
+    Face recognition using InsightFace Buffalo_l model
+    High accuracy deep learning-based face recognition
+    """
+    
+    def __init__(self, faces_dir='student_faces', encodings_file='face_encodings_buffalo.pkl'):
         self.faces_dir = faces_dir
         self.encodings_file = encodings_file
-        self.recognizer = cv2.face.LBPHFaceRecognizer_create()
         self.known_faces = {}
         self.trained = False
         
         # Create faces directory if it doesn't exist
         os.makedirs(faces_dir, exist_ok=True)
         
+        print("Initializing InsightFace Buffalo_l model...")
+        
+        # Initialize FaceAnalysis with Buffalo_l model
+        self.app = FaceAnalysis(
+            name='buffalo_l',
+            providers=['CPUExecutionProvider']  # Use 'CUDAExecutionProvider' if GPU available
+        )
+        self.app.prepare(ctx_id=0, det_size=(640, 640))
+        
+        print("✓ InsightFace Buffalo_l model loaded successfully!")
+        
         # Load existing encodings if available
         self.load_encodings()
     
+    def get_face_embedding(self, face_img):
+        """
+        Extract face embedding using Buffalo_l
+        Returns: 512-dimensional embedding vector
+        """
+        # Analyze face
+        faces = self.app.get(face_img)
+        
+        if len(faces) > 0:
+            # Return embedding of first detected face
+            return faces[0].embedding
+        
+        return None
+    
     def enroll_student(self, student_id, name, face_images):
         """
-        Enroll a student by providing their face images
-        face_images: list of numpy arrays (face images)
+        Enroll a student by extracting embeddings from their face images
+        face_images: list of numpy arrays (BGR images)
         """
         student_dir = os.path.join(self.faces_dir, student_id)
         os.makedirs(student_dir, exist_ok=True)
         
-        # Save face images
+        embeddings = []
+        
+        # Extract embeddings from all face images
         for idx, img in enumerate(face_images):
+            # Save image
             img_path = os.path.join(student_dir, f'face_{idx}.jpg')
             cv2.imwrite(img_path, img)
-        
-        self.known_faces[student_id] = {
-            'name': name,
-            'images': face_images
-        }
-        
-        print(f"Enrolled student: {student_id} - {name} with {len(face_images)} images")
-    
-    def train(self):
-        """Train the face recognizer on all enrolled students"""
-        faces = []
-        labels = []
-        label_map = {}
-        
-        # Load all student faces
-        for idx, student_id in enumerate(self.known_faces.keys()):
-            label_map[idx] = student_id
-            student_dir = os.path.join(self.faces_dir, student_id)
             
-            if os.path.exists(student_dir):
-                for img_file in os.listdir(student_dir):
-                    if img_file.endswith(('.jpg', '.png')):
-                        img_path = os.path.join(student_dir, img_file)
-                        img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-                        if img is not None:
-                            faces.append(img)
-                            labels.append(idx)
+            # Extract embedding
+            embedding = self.get_face_embedding(img)
+            if embedding is not None:
+                embeddings.append(embedding)
         
-        if len(faces) > 0:
-            self.recognizer.train(faces, np.array(labels))
+        if len(embeddings) > 0:
+            # Store average embedding for this student
+            avg_embedding = np.mean(embeddings, axis=0)
+            
+            self.known_faces[student_id] = {
+                'name': name,
+                'embedding': avg_embedding,
+                'num_samples': len(embeddings)
+            }
+            
             self.trained = True
-            self.label_map = label_map
-            print(f"Training complete! Trained on {len(faces)} face images from {len(label_map)} students")
-            
-            # Save encodings
             self.save_encodings()
+            
+            print(f"✓ Enrolled {name} ({student_id}) with {len(embeddings)} face samples")
         else:
-            print("No faces to train on")
+            print(f"⚠ No valid faces detected for {name}")
     
-    def identify_face(self, face_img, confidence_threshold=100):
+    def identify_face(self, face_img, similarity_threshold=0.4):
         """
-        Identify a face image
-        Returns: (student_id, confidence) or (None, 0) if not recognized
-        Lower confidence = better match
+        Identify a face using cosine similarity
+        Returns: (student_id, similarity_score) or (None, 0)
+        Higher similarity = better match (range: 0-1)
         """
-        if not self.trained:
+        if not self.trained or len(self.known_faces) == 0:
             return None, 0
         
-        gray = cv2.cvtColor(face_img, cv2.COLOR_BGR2GRAY) if len(face_img.shape) == 3 else face_img
-        label, confidence = self.recognizer.predict(gray)
+        # Get embedding for query face
+        query_embedding = self.get_face_embedding(face_img)
         
-        if confidence < confidence_threshold:
-            student_id = self.label_map.get(label)
-            return student_id, confidence
+        if query_embedding is None:
+            return None, 0
         
-        return None, confidence
+        # Find best match using cosine similarity
+        best_match = None
+        best_similarity = 0
+        
+        for student_id, data in self.known_faces.items():
+            stored_embedding = data['embedding']
+            
+            # Cosine similarity
+            similarity = np.dot(query_embedding, stored_embedding) / (
+                np.linalg.norm(query_embedding) * np.linalg.norm(stored_embedding)
+            )
+            
+            if similarity > best_similarity:
+                best_similarity = similarity
+                best_match = student_id
+        
+        # Return match if above threshold
+        if best_similarity >= similarity_threshold:
+            return best_match, float(best_similarity)
+        
+        return None, float(best_similarity)
     
     def save_encodings(self):
-        """Save trained model and mappings"""
+        """Save face encodings to pickle file"""
         data = {
             'known_faces': self.known_faces,
-            'label_map': self.label_map if self.trained else {},
             'trained': self.trained
         }
         
         with open(self.encodings_file, 'wb') as f:
             pickle.dump(data, f)
         
-        if self.trained:
-            self.recognizer.save('face_recognizer_model.yml')
-        
-        print(f"Saved encodings to {self.encodings_file}")
+        print(f"✓ Saved face encodings to {self.encodings_file}")
     
     def load_encodings(self):
-        """Load previously saved encodings"""
+        """Load previously saved face encodings"""
         if os.path.exists(self.encodings_file):
             try:
                 with open(self.encodings_file, 'rb') as f:
                     data = pickle.load(f)
                 
                 self.known_faces = data.get('known_faces', {})
-                self.label_map = data.get('label_map', {})
                 self.trained = data.get('trained', False)
                 
-                if self.trained and os.path.exists('face_recognizer_model.yml'):
-                    self.recognizer.read('face_recognizer_model.yml')
-                    print(f"Loaded {len(self.known_faces)} enrolled students")
+                print(f"✓ Loaded {len(self.known_faces)} enrolled students from {self.encodings_file}")
                 
             except Exception as e:
-                print(f"Error loading encodings: {e}")
+                print(f"⚠ Error loading encodings: {e}")
 
 
 class ClassroomAnalyzer:
-    """Analyze full classroom video with multiple students"""
+    """Analyze full classroom video with YOLOv8 + InsightFace Buffalo_l"""
     
     def __init__(self, behavior_predictor_func):
-        self.face_detector = FaceDetector(method='haar')
-        self.face_recognizer = FaceRecognizer()
+        print("Initializing Classroom Analyzer...")
+        self.yolo_detector = YOLODetector(model_size='n')  # YOLOv8n (fastest)
+        self.face_recognizer = BuffaloFaceRecognizer()
         self.behavior_predictor = behavior_predictor_func
+        print("✓ Classroom Analyzer ready!")
         
     def analyze_frame(self, frame):
         """
-        Analyze a classroom frame
+        Analyze a classroom frame with YOLO + InsightFace
         Returns: list of detected students with their behaviors
-        [
-            {
-                'student_id': 'S001',
-                'name': 'John Doe',
-                'bbox': (x, y, w, h),
-                'behavior': 'Reading',
-                'confidence': 0.85
-            },
-            ...
-        ]
         """
         results = []
         
-        # Detect all faces
-        faces = self.face_detector.detect_faces(frame)
+        # Detect all persons using YOLO
+        persons = self.yolo_detector.detect_persons(frame)
         
-        for (x, y, w, h) in faces:
-            # Extract face region with some padding
+        for (x1, y1, x2, y2, conf) in persons:
+            # Extract person region with padding
             padding = 20
-            y1 = max(0, y - padding)
-            y2 = min(frame.shape[0], y + h + padding)
-            x1 = max(0, x - padding)
-            x2 = min(frame.shape[1], x + w + padding)
+            h, w = frame.shape[:2]
+            y1_pad = max(0, y1 - padding)
+            y2_pad = min(h, y2 + padding)
+            x1_pad = max(0, x1 - padding)
+            x2_pad = min(w, x2 + padding)
             
-            face_img = frame[y1:y2, x1:x2]
+            person_img = frame[y1_pad:y2_pad, x1_pad:x2_pad]
             
-            if face_img.size == 0:
+            if person_img.size == 0:
                 continue
             
-            # Identify student
-            student_id, conf = self.face_recognizer.identify_face(face_img)
+            # Extract face region (upper 40% of person)
+            person_h = y2_pad - y1_pad
+            face_region = person_img[0:int(person_h * 0.4), :]
             
-            # Predict behavior for this region
-            behavior, behavior_conf = self.behavior_predictor(face_img)
+            # Identify student using InsightFace
+            student_id, similarity = self.face_recognizer.identify_face(face_region)
+            
+            # Predict behavior for full person region
+            behavior, behavior_conf = self.behavior_predictor(person_img)
             
             result = {
                 'student_id': student_id if student_id else 'Unknown',
                 'name': self.face_recognizer.known_faces.get(student_id, {}).get('name', 'Unknown') if student_id else 'Unknown',
-                'bbox': (x, y, w, h),
-                'face_confidence': conf,
+                'bbox': (x1, y1, x2, y2),
+                'detection_confidence': conf,
+                'face_similarity': similarity,
                 'behavior': behavior,
                 'behavior_confidence': behavior_conf
             }
@@ -248,13 +271,15 @@ class ClassroomAnalyzer:
     
     def process_video(self, video_path, sample_rate=30):
         """
-        Process entire classroom video
+        Process entire classroom video with YOLO + InsightFace
         Returns: dict with per-student analysis
         """
         cap = cv2.VideoCapture(video_path)
         
         student_data = {}  # student_id -> {frames: [], behaviors: []}
         frame_count = 0
+        
+        print(f"Processing video: {video_path}")
         
         while cap.isOpened():
             ret, frame = cap.read()
@@ -289,8 +314,13 @@ class ClassroomAnalyzer:
                     student_data[student_id]['behaviors'][detection['behavior']] += 1
             
             frame_count += 1
+            
+            # Progress indicator
+            if frame_count % 100 == 0:
+                print(f"  Processed {frame_count} frames...")
         
         cap.release()
+        print(f"✓ Video processing complete! Total frames: {frame_count}")
         
         # Calculate statistics for each student
         for student_id in student_data:
@@ -308,12 +338,57 @@ class ClassroomAnalyzer:
         return student_data
 
 
+# Legacy compatibility classes (for backward compatibility)
+class FaceDetector:
+    """Legacy face detector - now uses YOLO"""
+    def __init__(self, method='yolo'):
+        self.detector = YOLODetector(model_size='n')
+    
+    def detect_faces(self, frame):
+        """Detect faces using YOLO, return in (x, y, w, h) format"""
+        persons = self.detector.detect_persons(frame)
+        
+        faces = []
+        for (x1, y1, x2, y2, conf) in persons:
+            # Convert to (x, y, w, h) format
+            w = x2 - x1
+            h = y2 - y1
+            # Face is upper 40%
+            face_h = int(h * 0.4)
+            faces.append([x1, y1, w, face_h])
+        
+        return np.array(faces)
+
+
+class FaceRecognizer:
+    """Legacy face recognizer - now uses InsightFace Buffalo_l"""
+    def __init__(self, faces_dir='student_faces', encodings_file='face_encodings.pkl'):
+        self.recognizer = BuffaloFaceRecognizer(faces_dir, encodings_file)
+        self.known_faces = self.recognizer.known_faces
+        self.trained = self.recognizer.trained
+    
+    def enroll_student(self, student_id, name, face_images):
+        self.recognizer.enroll_student(student_id, name, face_images)
+        self.known_faces = self.recognizer.known_faces
+        self.trained = self.recognizer.trained
+    
+    def train(self):
+        # Training happens automatically in Buffalo_l
+        self.trained = self.recognizer.trained
+    
+    def identify_face(self, face_img, confidence_threshold=0.4):
+        student_id, similarity = self.recognizer.identify_face(face_img, confidence_threshold)
+        # Convert similarity to "confidence" (inverse for backward compatibility)
+        confidence = 100 * (1 - similarity) if student_id else 100
+        return student_id, confidence
+
+
 def capture_face_samples(student_id, name, num_samples=10):
     """
     Capture face samples from webcam for enrollment
     """
     cap = cv2.VideoCapture(0)
-    face_detector = FaceDetector()
+    yolo = YOLODetector(model_size='n')
     samples = []
     count = 0
     
@@ -325,13 +400,15 @@ def capture_face_samples(student_id, name, num_samples=10):
         if not ret:
             break
         
-        # Detect face
-        faces = face_detector.detect_faces(frame)
+        # Detect persons using YOLO
+        persons = yolo.detect_persons(frame)
         
-        # Draw rectangle around face
+        # Draw rectangles around detected persons
         display_frame = frame.copy()
-        for (x, y, w, h) in faces:
-            cv2.rectangle(display_frame, (x, y), (x+w, y+h), (0, 255, 0), 2)
+        for (x1, y1, x2, y2, conf) in persons:
+            cv2.rectangle(display_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.putText(display_frame, f'{conf:.2f}', (x1, y1-10),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
         
         cv2.putText(display_frame, f"Captured: {count}/{num_samples}", (10, 30),
                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
@@ -346,16 +423,21 @@ def capture_face_samples(student_id, name, num_samples=10):
             print("Cancelled")
             break
         
-        if key == 32 and len(faces) > 0:  # SPACE
-            # Capture the first detected face
-            x, y, w, h = faces[0]
-            face_img = frame[y:y+h, x:x+w]
+        if key == 32 and len(persons) > 0:  # SPACE
+            # Capture the first detected person's face region
+            x1, y1, x2, y2, conf = persons[0]
             
-            # Resize to standard size
-            face_img = cv2.resize(face_img, (200, 200))
-            samples.append(face_img)
-            count += 1
-            print(f"Captured sample {count}/{num_samples}")
+            # Extract face region (upper 40%)
+            h = y2 - y1
+            face_h = int(h * 0.4)
+            face_img = frame[y1:y1+face_h, x1:x2]
+            
+            if face_img.size > 0:
+                # Resize to standard size
+                face_img = cv2.resize(face_img, (200, 200))
+                samples.append(face_img)
+                count += 1
+                print(f"✓ Captured sample {count}/{num_samples}")
     
     cap.release()
     cv2.destroyAllWindows()
@@ -364,11 +446,12 @@ def capture_face_samples(student_id, name, num_samples=10):
 
 
 if __name__ == '__main__':
-    # Example usage: Enroll a student
-    print("Face Recognition System Setup")
-    print("=" * 50)
+    # Example usage: Enroll a student with Buffalo_l
+    print("=" * 60)
+    print("Face Recognition System - YOLOv8n + InsightFace Buffalo_l")
+    print("=" * 60)
     
-    recognizer = FaceRecognizer()
+    recognizer = BuffaloFaceRecognizer()
     
     # Check if we need to enroll students
     if len(recognizer.known_faces) == 0:
@@ -389,13 +472,6 @@ if __name__ == '__main__':
                 recognizer.enroll_student(student_id, name, samples)
             else:
                 print("No samples captured, skipping...")
-        
-        # Train the recognizer
-        if len(recognizer.known_faces) > 0:
-            print("\nTraining face recognizer...")
-            recognizer.train()
     else:
-        print(f"\n{len(recognizer.known_faces)} students already enrolled")
+        print(f"\n✓ {len(recognizer.known_faces)} students already enrolled")
         print("Run with --enroll to add more students")
-
-
