@@ -1,7 +1,12 @@
-# Requirements for Student Behaviors Notebook
+# Requirements for Student Behavior Analysis System
 # Install with: pip install -r requirements.txt
 
-# Core ML libraries
+# Core ML libraries - PyTorch
+torch>=2.0.0
+torchvision>=0.15.0
+timm>=0.9.0                # PyTorch Image Models (for Swin Transformer)
+
+# Core ML libraries - TensorFlow (legacy support)
 tensorflow>=2.10.0
 tensorflow-addons>=0.20.0
 keras>=2.10.0
@@ -23,6 +28,8 @@ numpy>=1.21.0
 pandas>=1.3.0
 scikit-learn>=1.0.0
 matplotlib>=3.5.0
+seaborn>=0.12.0
+pillow>=9.0.0
 
 # Utilities
 tqdm>=4.62.0

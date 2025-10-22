@@ -67,4 +67,18 @@ Thumbs.db
 .env.test.local
 .env.production.local
 
+# Datasets (too large for git)
+Behaviors_Features/
+NDB/
+NDB.zip
+student_faces/
+
+# Training artifacts
+*.log
+training_behavior.log
+models/behavior/*.pth
+models/face/*.pth
+behavior_analysis.db
+dataset_analysis.json
+
 
