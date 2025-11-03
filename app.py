@@ -22,11 +22,18 @@ from admin_auth import (
     login_admin, logout_admin, is_admin_logged_in, admin_required, change_admin_password
 )
 
+# Performance optimization
+import torch
+torch.set_num_threads(16)  # Use all CPU threads (Ryzen 7 5700U)
+torch.set_num_interop_threads(4)  # Parallel operations
+os.environ['OMP_NUM_THREADS'] = '16'
+os.environ['MKL_NUM_THREADS'] = '16'
+
 app = Flask(__name__)
 CORS(app, supports_credentials=True)  # Enable CORS with credentials for session
 app.secret_key = os.urandom(24)  # Secret key for sessions
 app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB max file size
 app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif', 'mp4', 'avi', 'mov'}
 
 # Create upload folder if it doesn't exist
@@ -34,7 +41,8 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # Global variables
 model = None
-LABELS = ['Raising Hand', 'Reading', 'Sleeping', 'Writing']
+device = None
+LABELS = ['Looking_Forward', 'Raising_Hand', 'Reading', 'Sleeping', 'Standing', 'Turning_Around', 'Writting']
 
 # Face recognition system
 face_recognizer = None
@@ -44,21 +52,55 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
 def load_model():
-    """Load the trained model"""
-    global model, face_recognizer, classroom_analyzer
+    """Load the trained PyTorch behavior model"""
+    global model, device, face_recognizer, classroom_analyzer
+    
     try:
-        # Try to load the model if it exists
-        import tensorflow as tf
-        model_path = './saved_model/student_behavior_model.h5'
-        if os.path.exists(model_path):
-            model = tf.keras.models.load_model(model_path)
-            print("✓ Model loaded successfully!")
-        else:
-            print("⚠ Model file not found. Please train the model first.")
+        import torch
+        import torch.nn as nn
+        import timm
+        
+        # Define BehaviorClassifier (matches training code)
+        class BehaviorClassifier(nn.Module):
+            def __init__(self, num_classes=7, pretrained=False, model_name='swin_tiny_patch4_window7_224'):
+                super().__init__()
+                self.backbone = timm.create_model(model_name, pretrained=pretrained, num_classes=num_classes)
+                self.num_classes = num_classes
+            
+            def forward(self, x):
+                return self.backbone(x)
+        
+        # Check for GPU
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        print(f"Using device: {device}")
+        
+        # Load model checkpoint
+        model_path = './temptrainedoutput/best_behavior_model_fixed.pth'
+        if not os.path.exists(model_path):
+            print(f"⚠ Model file not found at {model_path}")
             model = None
+        else:
+            checkpoint = torch.load(model_path, map_location=device)
+            
+            # Create model
+            model = BehaviorClassifier(num_classes=7, pretrained=False)
+            
+            # Load state dict
+            if 'model_state_dict' in checkpoint:
+                model.load_state_dict(checkpoint['model_state_dict'])
+            else:
+                model.load_state_dict(checkpoint)
+            
+            model.to(device)
+            model.eval()
+            print(f"✓ PyTorch behavior model loaded successfully from {model_path}")
+            
     except Exception as e:
-        print(f"⚠ Error loading model: {e}")
+        print(f"⚠ Error loading behavior model: {e}")
+        import traceback
+        traceback.print_exc()
         model = None
+        device = torch.device('cpu')
     
     # Initialize face recognition system
     try:
@@ -80,7 +122,7 @@ def preprocess_image(image_path):
     return img
 
 def predict_behavior(image_path):
-    """Predict student behavior from image"""
+    """Predict student behavior from image using PyTorch"""
     if model is None:
         # Return mock predictions if model is not loaded
         import random
@@ -99,12 +141,29 @@ def predict_behavior(image_path):
         }
     
     try:
-        img = preprocess_image(image_path)
-        predictions = model.predict(img)[0]
+        import torch
+        from torchvision import transforms
+        from PIL import Image
+        
+        # Load and transform image
+        img = Image.open(image_path).convert('RGB')
+        
+        transform = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
+        
+        img_tensor = transform(img).unsqueeze(0).to(device)
+        
+        # Predict
+        with torch.no_grad():
+            outputs = model(img_tensor)
+            probs = torch.softmax(outputs, dim=1)[0]
         
         # Sort predictions by confidence
         pred_list = [
-            {'label': LABELS[i], 'confidence': float(predictions[i])}
+            {'label': LABELS[i], 'confidence': float(probs[i].item())}
             for i in range(len(LABELS))
         ]
         pred_list.sort(key=lambda x: x['confidence'], reverse=True)
@@ -116,10 +175,12 @@ def predict_behavior(image_path):
         }
     except Exception as e:
         print(f"Error during prediction: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 def predict_from_frame(frame):
-    """Predict behavior from a numpy frame"""
+    """Predict behavior from a numpy frame using PyTorch"""
     if model is None:
         import random
         behaviors = ['Raising Hand', 'Reading', 'Writing', 'Sleeping']
@@ -130,17 +191,35 @@ def predict_from_frame(frame):
         return behaviors[top_idx], confidences[top_idx]
     
     try:
+        import torch
+        from torchvision import transforms
+        from PIL import Image
+        
+        # Convert BGR to RGB
         img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        img = cv2.resize(img, (224, 224))
-        img = img / 255.0
-        img = np.expand_dims(img, axis=0)
+        img = Image.fromarray(img)
         
-        predictions = model.predict(img)[0]
-        top_idx = np.argmax(predictions)
+        # Apply transforms (same as training)
+        transform = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
         
-        return LABELS[top_idx], float(predictions[top_idx])
+        img_tensor = transform(img).unsqueeze(0).to(device)
+        
+        # Predict
+        with torch.no_grad():
+            outputs = model(img_tensor)
+            probs = torch.softmax(outputs, dim=1)[0]
+            top_idx = torch.argmax(probs).item()
+            confidence = probs[top_idx].item()
+        
+        return LABELS[top_idx], float(confidence)
     except Exception as e:
         print(f"Error during frame prediction: {e}")
+        import traceback
+        traceback.print_exc()
         return 'Unknown', 0.0
 
 def process_video(video_path):
@@ -222,8 +301,16 @@ def predict():
         file_ext = filename.rsplit('.', 1)[1].lower()
         
         if file_ext in {'mp4', 'avi', 'mov'}:
-            # Process video
-            result = process_video(filepath)
+            # Process video with classroom analyzer (includes face recognition)
+            if classroom_analyzer:
+                student_data = classroom_analyzer.process_video(filepath, sample_rate=10)
+                result = {
+                    'student_data': student_data,
+                    'total_students': len(student_data) if student_data else 0
+                }
+            else:
+                # Fallback to simple behavior classification
+                result = process_video(filepath)
             result_type = 'video'
         else:
             # Process image
@@ -524,6 +611,70 @@ def get_admin_audit_logs():
         limit = request.args.get('limit', 100, type=int)
         logs = get_audit_logs(limit)
         return jsonify({'logs': logs})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ============= DOWNLOAD REPORTS =============
+
+@app.route('/api/reports/<int:report_id>/download', methods=['GET'])
+def download_report(report_id):
+    """Download report as JSON file"""
+    try:
+        report = get_report_details(report_id)
+        if not report:
+            return jsonify({'error': 'Report not found'}), 404
+        
+        # Create filename with student ID and date
+        student_id = report.get('student_id', 'Unknown')
+        date_str = report.get('session_date', '').split('T')[0]
+        filename = f"report_{student_id}_{date_str}.json"
+        
+        # Create response with file content
+        import json
+        response = jsonify(report)
+        response.headers['Content-Disposition'] = f'attachment; filename={filename}'
+        response.headers['Content-Type'] = 'application/json'
+        
+        return response
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/reports/download-multiple', methods=['POST'])
+def download_multiple_reports():
+    """Download multiple reports as ZIP"""
+    try:
+        data = request.json
+        report_ids = data.get('report_ids', [])
+        
+        if not report_ids:
+            return jsonify({'error': 'No report IDs provided'}), 400
+        
+        # Create temporary ZIP file
+        import tempfile
+        import json
+        
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+        temp_file.close()
+        
+        with zipfile.ZipFile(temp_file.name, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for report_id in report_ids:
+                report = get_report_details(report_id)
+                if report:
+                    student_id = report.get('student_id', 'Unknown')
+                    date_str = report.get('session_date', '').split('T')[0]
+                    filename_in_zip = f"{student_id}/report_{date_str}.json"
+                    
+                    # Convert report to JSON string
+                    report_json = json.dumps(report, indent=2, default=str)
+                    zipf.writestr(filename_in_zip, report_json)
+        
+        # Send ZIP file
+        return send_file(
+            temp_file.name,
+            as_attachment=True,
+            download_name='student_reports.zip',
+            mimetype='application/zip'
+        )
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

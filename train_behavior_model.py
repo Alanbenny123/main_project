@@ -13,6 +13,7 @@ import json
 import time
 from typing import Dict, Tuple
 import numpy as np
+import zipfile
 from sklearn.metrics import classification_report, confusion_matrix
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -373,7 +374,7 @@ def main():
         'balance_classes': False,  # Use full dataset
         'max_samples_per_class': None,  # Use all data
         'device': 'cuda' if torch.cuda.is_available() else 'cpu',
-        'save_dir': 'models/behavior'
+        'save_dir': 'temptrainedoutput'
     }
     
     print("Configuration:")
@@ -454,6 +455,45 @@ def main():
     
     print(f"\nTest results saved to {test_results_path}")
     print("\n[DONE] Training and evaluation complete!")
+    
+    # Create archive for download
+    create_download_archive(config['save_dir'])
+
+
+def create_download_archive(save_dir: str):
+    """Create a ZIP archive of all training outputs for download"""
+    save_path = Path(save_dir)
+    
+    if not save_path.exists():
+        print(f"\nWarning: Save directory {save_dir} not found")
+        return
+    
+    # Create archive
+    archive_path = save_path.parent / f"{save_path.name}_download.zip"
+    
+    print(f"\n📦 Creating download archive...")
+    print(f"   Source: {save_path}")
+    print(f"   Output: {archive_path}")
+    
+    files_added = 0
+    with zipfile.ZipFile(archive_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for file_path in save_path.rglob('*'):
+            if file_path.is_file():
+                # Use relative path within archive
+                arcname = file_path.relative_to(save_path.parent)
+                zipf.write(file_path, arcname)
+                files_added += 1
+                if files_added <= 10:  # Show first 10 files
+                    print(f"   Added: {arcname}")
+    
+    if files_added > 10:
+        print(f"   ... and {files_added - 10} more files")
+    
+    file_size_mb = archive_path.stat().st_size / (1024 * 1024)
+    print(f"\n✅ Download archive created: {archive_path}")
+    print(f"   Total files: {files_added}")
+    print(f"   Size: {file_size_mb:.2f} MB")
+    print(f"\n📥 Ready to download! Location: {archive_path.absolute()}")
 
 
 if __name__ == '__main__':

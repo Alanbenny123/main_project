@@ -280,6 +280,24 @@ body.dark-mode .model-status.active .status-indicator {
   transition: color 0.3s ease;
 }
 
+.status-refresh {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  margin-left: 0.5rem;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  opacity: 0.7;
+}
+
+.status-refresh:hover {
+  opacity: 1;
+  background: rgba(59, 130, 246, 0.1);
+  transform: rotate(90deg);
+}
+
 body.dark-mode .status-text {
   color: #93c5fd;
 }

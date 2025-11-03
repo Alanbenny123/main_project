@@ -19,8 +19,8 @@ function App() {
     return saved ? JSON.parse(saved) : false;
   });
 
-  useEffect(() => {
-    // Check model status on load
+  const checkModelStatus = () => {
+    setModelStatus({ loaded: false, text: 'Checking...' });
     fetch('http://localhost:5000/api/model-info')
       .then(res => res.json())
       .then(data => {
@@ -32,6 +32,11 @@ function App() {
       .catch(() => {
         setModelStatus({ loaded: false, text: 'API Offline' });
       });
+  };
+
+  useEffect(() => {
+    // Check model status on load
+    checkModelStatus();
 
     // Load stats
     fetch('http://localhost:5000/api/stats')
@@ -57,6 +62,7 @@ function App() {
 
   const handleAnalysisComplete = (data) => {
     setResults(data);
+    setActiveTab('upload');
   };
 
   return (
@@ -71,6 +77,9 @@ function App() {
           <div className={`model-status ${modelStatus.loaded ? 'active' : ''}`}>
             <span className="status-indicator"></span>
             <span className="status-text">{modelStatus.text}</span>
+            <button className="status-refresh" onClick={checkModelStatus} title="Refresh status">
+              🔄
+            </button>
           </div>
           <button className="theme-toggle" onClick={toggleDarkMode} title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
             {darkMode ? '☀️' : '🌙'}
@@ -120,28 +129,14 @@ function App() {
 
       {/* Main Content */}
       <main className="main-content">
-        {activeTab === 'upload' && (
-          <>
-            <UploadSection onAnalysisComplete={handleAnalysisComplete} />
-            {results && <ResultsSection results={results} />}
-            {stats && <StatsSection stats={stats} />}
-          </>
-        )}
-
-        {activeTab === 'live' && <LiveAnalysis />}
-
-        {activeTab === 'classroom' && <ClassroomAnalysis />}
-
-        {activeTab === 'enroll' && <FaceEnrollment />}
-
-        {activeTab === 'dashboard' && <StudentDashboard />}
-
-        {activeTab === 'audit' && <AuditLog />}
+        <UploadSection onAnalysisComplete={handleAnalysisComplete} />
+        <ResultsSection results={results} />
+        <StatsSection stats={stats} />
       </main>
 
       {/* Footer */}
       <footer className="footer">
-        <p>Powered by Swin Transformer • TensorFlow • Computer Vision</p>
+        Built with ❤️ for classroom analytics
       </footer>
     </div>
   );

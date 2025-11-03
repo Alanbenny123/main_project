@@ -298,10 +298,13 @@ class ClassroomAnalyzer:
                             'name': detection['name'],
                             'frames': [],
                             'behaviors': {
-                                'Raising Hand': 0,
+                                'Looking_Forward': 0,
+                                'Raising_Hand': 0,
                                 'Reading': 0,
                                 'Sleeping': 0,
-                                'Writing': 0
+                                'Standing': 0,
+                                'Turning_Around': 0,
+                                'Writting': 0
                             }
                         }
                     

@@ -98,6 +98,73 @@ function StudentDashboard() {
     return `${mins}m ${secs}s`;
   };
 
+  const handleDownloadReport = async (reportId) => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/reports/${reportId}/download`);
+      
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        
+        // Get filename from Content-Disposition header
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let filename = 'report.json';
+        if (contentDisposition) {
+          const matches = /filename="?([^"]+)"?/i.exec(contentDisposition);
+          if (matches && matches[1]) {
+            filename = matches[1];
+          }
+        }
+        
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      } else {
+        alert('Failed to download report');
+      }
+    } catch (error) {
+      console.error('Error downloading report:', error);
+      alert('Failed to download report');
+    }
+  };
+
+  const handleDownloadAllReports = async () => {
+    if (reports.length === 0) {
+      alert('No reports to download');
+      return;
+    }
+
+    try {
+      const reportIds = reports.map(r => r.id);
+      const response = await fetch('http://localhost:5000/api/reports/download-multiple', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ report_ids: reportIds })
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'student_reports.zip';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      } else {
+        alert('Failed to download reports');
+      }
+    } catch (error) {
+      console.error('Error downloading reports:', error);
+      alert('Failed to download reports');
+    }
+  };
+
   if (!isLoggedIn) {
     if (showLogin) {
       return (
@@ -159,7 +226,16 @@ function StudentDashboard() {
 
         {reports.length > 0 && (
           <div className="reports-section">
-            <h3>Analysis Reports</h3>
+            <div className="reports-header">
+              <h3>Analysis Reports</h3>
+              <button 
+                className="btn-secondary btn-download-all"
+                onClick={handleDownloadAllReports}
+                title="Download All Reports"
+              >
+                ⬇️ Download All
+              </button>
+            </div>
             <div className="reports-grid">
               {reports.map((report) => {
                 const engagement = getEngagementLevel(report.engagement_score);
@@ -201,12 +277,21 @@ function StudentDashboard() {
                       ))}
                     </div>
 
-                    <button
-                      className="btn-view-details"
-                      onClick={() => viewReportDetails(report.id)}
-                    >
-                      View Details
-                    </button>
+                    <div className="report-actions">
+                      <button
+                        className="btn-view-details"
+                        onClick={() => viewReportDetails(report.id)}
+                      >
+                        View Details
+                      </button>
+                      <button
+                        className="btn-download"
+                        onClick={() => handleDownloadReport(report.id)}
+                        title="Download Report"
+                      >
+                        ⬇️ Download
+                      </button>
+                    </div>
                   </div>
                 );
               })}
