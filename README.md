@@ -39,6 +39,35 @@ AI-powered classroom behavior detection using deep learning and computer vision.
 - **SQLite** - Database for reports and students
 - **NumPy** - Numerical computations
 
+## 🔐 Private Model Repository
+
+**Trained models and artifacts are stored in a private repository** (`mma-artifacts`) to protect sensitive data.
+
+### Access Instructions (Contributors Only)
+
+**If you're a collaborator**, you need access to download models:
+
+1. **Get access:** Request access from the repository owner
+2. **Authenticate GitHub CLI:**
+   ```powershell
+   gh auth login
+   ```
+3. **Download models:**
+   ```powershell
+   pwsh -File scripts\pull_models.ps1
+   ```
+   Or manually:
+   ```powershell
+   gh release download behavior-v1 `
+     -R Alanbenny123/mma-artifacts `
+     -p "best_behavior_model_fixed.pth" `
+     -D temptrainedoutput
+   ```
+
+**See [complete_setup.md](complete_setup.md) for full setup instructions.**
+
+---
+
 ## Setup Instructions
 
 ### 1. Backend Setup
